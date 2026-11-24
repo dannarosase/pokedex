@@ -1,6 +1,6 @@
 // Service Worker: cachea la interfaz para que abra sin conexión.
 // Si cambias archivos, sube el número de VERSION para forzar la actualización.
-const VERSION = 'v3';
+const VERSION = 'v2';
 const CACHE = `pokedex-${VERSION}`;
 
 const ARCHIVOS_LOCALES = [

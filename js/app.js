@@ -389,7 +389,6 @@ async function leerQR() {
 
   const lector = new Html5Qrcode('lector', {
     formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
     verbose: false
   });
   lectorQR = lector;
@@ -405,7 +404,7 @@ async function leerQR() {
     try {
       await lector.start({ facingMode: 'environment' }, config, alLeer, () => {});
     } catch (e1) {
-      if (e1 && e1.name === 'NotAllowedError') throw e1;
+      if (e1 && e1.name === 'NotAllowedError') throw e1;           // permiso denegado: no reintentar
       const camaras = await Html5Qrcode.getCameras();
       if (!camaras.length) throw e1;
       await lector.start(camaras[camaras.length - 1].id, config, alLeer, () => {});
@@ -432,21 +431,6 @@ async function leerQR() {
     }
   }
 }
-
-// Leer un QR desde una imagen (alternativa a la cámara)
-async function leerQRDesdeArchivo(archivo) {
-  if (typeof Html5Qrcode === 'undefined') { mostrarToast('El lector QR no está cargado.'); return; }
-  try {
-    const h = new Html5Qrcode('lector-archivo');
-    const texto = await h.scanFile(archivo, false);
-    try { h.clear(); } catch (_) {}
-    procesarCodigo(texto);
-  } catch (err) {
-    console.error('scanFile:', err);
-    mostrarToast('No se detectó ningún QR en la imagen.');
-  }
-}
-
 async function detenerLector() {
   clearTimeout(temporizadorAyuda);
   const lector = lectorQR;
@@ -623,11 +607,6 @@ function iniciarEventos() {
     procesarCodigo(v);
   };
   $('qr-manual-btn').addEventListener('click', enviarManual);
-  $('qr-archivo').addEventListener('change', (e) => {
-    const f = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (f) leerQRDesdeArchivo(f);
-  });
   $('qr-manual').addEventListener('keydown', (e) => { if (e.key === 'Enter') enviarManual(); });
 
   $('btn-instalar').addEventListener('click', async () => {
