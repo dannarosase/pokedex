@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Códigos QR · Pokédex</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; background: #f1f5f9; color: #0f172a; }
+    h1 { margin: 0 0 4px; }
+    p.sub { margin: 0 0 16px; color: #475569; }
+    .barra { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    input, button { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid #94a3b8; }
+    button { background: #dc2626; color: #fff; border: 0; font-weight: 700; cursor: pointer; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+    .tarjeta { background: #fff; border-radius: 12px; padding: 12px; text-align: center; box-shadow: 0 1px 4px #0002; break-inside: avoid; }
+    .tarjeta h3 { margin: 8px 0 0; text-transform: capitalize; }
+    .tarjeta code { display: block; color: #475569; margin-bottom: 8px; }
+    .qr { display: flex; justify-content: center; }
+    .tarjeta a { display: inline-block; margin-top: 8px; font-size: 13px; color: #1d4ed8; }
+    @media print { .barra, .tarjeta a { display: none; } body { background: #fff; } }
+  </style>
+</head>
+<body>
+  <h1>Códigos QR de prueba</h1>
+  <p class="sub">Formato: <code>pokemon:{id}</code>. Requiere Internet para cargar la librería generadora. Usa “Imprimir” o descarga cada PNG.</p>
+
+  <div class="barra">
+    <input id="id-extra" type="number" min="1" max="151" placeholder="ID (1–151)" />
+    <button id="agregar">Agregar QR</button>
+    <button id="imprimir" style="background:#1d4ed8">Imprimir</button>
+  </div>
+
+  <div id="grid" class="grid"></div>
+
+  <script>
+    // Pokémon que pide el PDF como mínimo
+    const BASE = [
+      [1, 'Bulbasaur'], [4, 'Charmander'], [7, 'Squirtle'], [25, 'Pikachu'], [39, 'Jigglypuff'],
+      [52, 'Meowth'], [94, 'Gengar'], [133, 'Eevee'], [150, 'Mewtwo'], [151, 'Mew']
+    ];
+    const grid = document.getElementById('grid');
+
+    function crearQR(id, nombre) {
+      const texto = 'pokemon:' + id;
+      const card = document.createElement('div');
+      card.className = 'tarjeta';
+      card.innerHTML = `<div class="qr"></div><h3>#${String(id).padStart(3, '0')} ${nombre || ''}</h3><code>${texto}</code><a download="pokemon-${id}.png">Descargar PNG</a>`;
+      grid.appendChild(card);
+      new QRCode(card.querySelector('.qr'), { text: texto, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+      // qrcodejs dibuja un canvas; lo convertimos al enlace de descarga
+      setTimeout(() => {
+        const canvas = card.querySelector('canvas');
+        if (canvas) card.querySelector('a').href = canvas.toDataURL('image/png');
+      }, 100);
+    }
+
+    BASE.forEach(([id, n]) => crearQR(id, n));
+
+    document.getElementById('agregar').addEventListener('click', () => {
+      const id = parseInt(document.getElementById('id-extra').value, 10);
+      if (!(id >= 1 && id <= 151)) { alert('Escribe un ID entre 1 y 151'); return; }
+      crearQR(id, '');
+    });
+    document.getElementById('imprimir').addEventListener('click', () => window.print());
+  </script>
+</body>
+</html>

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#dc2626" />
+  <meta name="description" content="Pokédex PWA: captura Pokémon de la primera generación escaneando códigos QR." />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Pokédex" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <title>Pokédex</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { dex: { red: '#dc2626', dark: '#991b1b', screen: '#c8e6c9', ink: '#0f2a1a' } } } }
+    };
+  </script>
+  <style>
+    body { -webkit-tap-highlight-color: transparent; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .corner { position: absolute; width: 36px; height: 36px; border: 4px solid #facc15; z-index: 5; }
+    #lector { overflow: hidden; }
+    @keyframes barrido { 0% { top: 8%; } 50% { top: 90%; } 100% { top: 8%; } }
+    .linea-escaner { animation: barrido 2.4s ease-in-out infinite; }
+    @keyframes aparecer { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+    .carta-nueva { animation: aparecer .35s ease-out; }
+  </style>
+</head>
+<body class="bg-dex-dark">
+
+<div class="relative mx-auto flex h-[100dvh] max-w-md flex-col overflow-hidden bg-dex-red">
+
+  <!-- ENCABEZADO ESTILO POKÉDEX -->
+  <header class="relative shrink-0 border-b-4 border-dex-dark bg-dex-red px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-md">
+    <div class="flex items-center gap-3">
+      <div class="flex h-14 w-14 items-center justify-center rounded-full border-4 border-white bg-gradient-to-br from-sky-300 to-blue-700 shadow-inner">
+        <div class="h-5 w-5 rounded-full bg-white/60"></div>
+      </div>
+      <div class="flex gap-2">
+        <span class="h-3 w-3 rounded-full border border-dex-dark bg-red-300"></span>
+        <span class="h-3 w-3 rounded-full border border-dex-dark bg-yellow-300"></span>
+        <span id="luz-estado" class="h-3 w-3 rounded-full border border-dex-dark bg-green-400"></span>
+      </div>
+      <h1 id="titulo" class="ml-auto text-lg font-extrabold tracking-widest text-white">MI POKÉDEX</h1>
+    </div>
+    <p id="banner-offline" class="hidden mt-2 rounded-md bg-slate-900 px-3 py-1 text-center text-xs font-bold text-yellow-300">
+      Sin conexión · puedes ver tu colección, pero no capturar nuevos Pokémon
+    </p>
+  </header>
+
+  <!-- CONTENIDO -->
+  <main class="no-scrollbar flex-1 overflow-y-auto bg-dex-red px-3 pb-40 pt-3">
+
+    <!-- VISTA: POKÉDEX -->
+    <section id="vista-pokedex" class="vista">
+      <div class="rounded-xl border-4 border-dex-dark bg-dex-screen p-3 shadow-inner">
+        <p id="contador" class="mb-3 text-center text-sm font-bold text-dex-ink">0 / 151 Pokémon</p>
+
+        <!-- Filtros -->
+        <div class="mb-3 flex gap-2" id="filtros">
+          <button data-filtro="todos" class="filtro-btn flex-1 rounded-full border-2 border-dex-ink/30 px-2 py-2 text-xs font-bold">Todos</button>
+          <button data-filtro="capturados" class="filtro-btn flex-1 rounded-full border-2 border-dex-ink/30 px-2 py-2 text-xs font-bold">Capturados</button>
+          <button data-filtro="faltantes" class="filtro-btn flex-1 rounded-full border-2 border-dex-ink/30 px-2 py-2 text-xs font-bold">Faltantes</button>
+        </div>
+
+        <!-- Estado: cargando colección -->
+        <div id="estado-carga" class="hidden py-8 text-center">
+          <div class="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-4 border-dex-ink/20 border-t-dex-red"></div>
+          <p class="text-sm font-bold text-dex-ink">Consultando Pokédex...</p>
+        </div>
+
+        <!-- Estado: vacío -->
+        <div id="estado-vacio" class="mb-3 hidden rounded-lg border-2 border-dashed border-dex-ink/40 p-4 text-center">
+          <p class="text-3xl">📷</p>
+          <p class="font-bold text-dex-ink">Tu Pokédex está vacía</p>
+          <p class="text-xs text-dex-ink/70">Escanea tu primer código QR para comenzar tu aventura.</p>
+        </div>
+
+        <!-- Estado: sin resultados en el filtro -->
+        <div id="estado-filtro-vacio" class="mb-3 hidden rounded-lg border-2 border-dashed border-dex-ink/40 p-4 text-center">
+          <p class="font-bold text-dex-ink" id="texto-filtro-vacio">Nada por aquí</p>
+        </div>
+
+        <!-- Estado: contenido -->
+        <div id="grid" class="grid grid-cols-2 gap-3"></div>
+      </div>
+    </section>
+
+    <!-- VISTA: PROGRESO -->
+    <section id="vista-progreso" class="vista hidden">
+      <div class="rounded-xl border-4 border-dex-dark bg-dex-screen p-5 text-dex-ink shadow-inner">
+        <h2 class="mb-4 text-center text-xl font-extrabold">Progreso</h2>
+        <div class="mb-4 rounded-lg bg-white p-4 text-center shadow">
+          <p class="text-sm font-semibold text-slate-500">Pokémon capturados</p>
+          <p class="text-4xl font-black"><span id="prog-cantidad">0</span> <span class="text-xl text-slate-400">/ 151</span></p>
+        </div>
+        <div class="rounded-lg bg-white p-4 shadow">
+          <div class="mb-2 flex justify-between text-sm font-semibold">
+            <span>Porcentaje completado</span><span id="prog-porcentaje">0 %</span>
+          </div>
+          <div class="h-5 w-full overflow-hidden rounded-full bg-slate-300">
+            <div id="prog-barra" class="h-full rounded-full bg-gradient-to-r from-red-500 to-yellow-400 transition-all duration-500" style="width:0%"></div>
+          </div>
+        </div>
+        <div id="prog-ultimo" class="mt-4 hidden rounded-lg bg-white p-3 text-sm shadow"></div>
+        <p id="prog-mensaje" class="mt-4 text-center text-xs text-dex-ink/60"></p>
+      </div>
+    </section>
+
+    <!-- VISTA: ACERCA DE -->
+    <section id="vista-acerca" class="vista hidden">
+      <div class="rounded-xl border-4 border-dex-dark bg-dex-screen p-5 text-dex-ink shadow-inner">
+        <h2 class="mb-3 text-center text-xl font-extrabold">Acerca de</h2>
+        <p class="mb-3 text-sm">Pokédex PWA de la primera generación (#001 – #151). Captura Pokémon escaneando códigos QR con el formato <code class="rounded bg-white px-1">pokemon:{id}</code>.</p>
+        <ul class="space-y-1 rounded-lg bg-white p-3 text-sm shadow">
+          <li><b>Proyecto:</b> Pokédex PWA</li>
+          <li><b>Clase:</b> Apps Móviles</li>
+          <li><b>Equipo:</b> Danna Kristell Rosas, Luz Aida Zamorano, Daniela Paulina Noriega, Jimena Castellanos</li>
+          <li><b>Datos:</b> PokéAPI</li>
+          <li><b>Lector QR:</b> html5-qrcode</li>
+          <li><b>Versión:</b> 1.0</li>
+        </ul>
+        <button id="btn-instalar" class="mt-4 hidden w-full rounded-full bg-blue-600 px-5 py-3 font-extrabold text-white shadow active:scale-95">
+          Instalar aplicación
+        </button>
+        <p id="ayuda-instalar" class="mt-3 text-center text-xs text-dex-ink/60">
+          Para instalarla: en Chrome/Android usa “Instalar aplicación”; en iPhone (Safari) toca Compartir → “Agregar a pantalla de inicio”.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <!-- FAB -->
+  <button id="fab" class="absolute bottom-24 right-4 z-20 flex items-center gap-2 rounded-full border-4 border-white bg-blue-600 px-5 py-4 font-extrabold text-white shadow-xl active:scale-95">
+    <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="4"/></svg>
+    Escanear
+  </button>
+
+  <!-- BOTTOM NAVIGATION -->
+  <nav class="absolute inset-x-0 bottom-0 z-10 flex border-t-4 border-dex-dark bg-slate-900 pb-[env(safe-area-inset-bottom)] text-white">
+    <button data-nav="pokedex" class="nav-btn flex flex-1 flex-col items-center gap-0.5 py-3 text-yellow-300">
+      <i data-lucide="book-open" class="w-6 h-6"></i>
+      <span class="text-xs font-bold">Pokédex</span>
+    </button>
+    <button data-nav="progreso" class="nav-btn flex flex-1 flex-col items-center gap-0.5 py-3 text-slate-300">
+      <i data-lucide="chart-no-axes-column-increasing" class="w-6 h-6"></i>
+      <span class="text-xs font-bold">Progreso</span>
+    </button>
+    <button data-nav="acerca" class="nav-btn flex flex-1 flex-col items-center gap-0.5 py-3 text-slate-300">
+      <i data-lucide="info" class="w-6 h-6"></i>
+      <span class="text-xs font-bold">Acerca de</span>
+    </button>
+  </nav>
+
+  <!-- BOTTOM SHEET: DETALLE / CONFIRMAR CAPTURA / CARGA / ERROR -->
+  <div id="sheet-fondo" class="absolute inset-0 z-30 hidden bg-black/60"></div>
+  <div id="sheet" class="absolute inset-x-0 bottom-0 z-40 max-h-[88%] translate-y-full overflow-y-auto rounded-t-3xl border-t-4 border-dex-dark bg-dex-screen p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] text-dex-ink transition-transform duration-300">
+    <div class="mx-auto mb-3 h-1.5 w-12 rounded-full bg-dex-ink/30"></div>
+    <div id="sheet-contenido"></div>
+  </div>
+
+  <!-- ESCÁNER QR -->
+  <div id="escaner" class="absolute inset-0 z-50 hidden flex-col bg-black text-white">
+    <div class="flex items-center justify-between p-4 pt-[calc(1rem+env(safe-area-inset-top))]">
+      <h2 class="text-lg font-bold">Escanear código QR</h2>
+      <button id="escaner-cerrar" aria-label="Cerrar" class="h-10 w-10 rounded-full bg-white/20 text-lg font-bold">✕</button>
+    </div>
+    <div class="flex flex-1 flex-col items-center justify-center gap-5 px-6">
+      <div class="relative h-72 w-72 bg-slate-800">
+        <div id="lector" class="absolute inset-0"></div>
+        <span class="corner left-0 top-0 border-b-0 border-r-0"></span>
+        <span class="corner right-0 top-0 border-b-0 border-l-0"></span>
+        <span class="corner bottom-0 left-0 border-r-0 border-t-0"></span>
+        <span class="corner bottom-0 right-0 border-l-0 border-t-0"></span>
+        <div id="linea-escaner" class="linea-escaner absolute inset-x-4 z-[5] h-0.5 bg-red-500"></div>
+      </div>
+
+      <p id="lector-estado" class="px-4 text-center text-sm text-slate-300">Apunta la cámara al código QR de un Pokémon.</p>
+
+      <!-- Error de cámara -->
+      <div id="lector-error" class="hidden w-full rounded-xl bg-red-900/80 p-4 text-center">
+        <p id="lector-error-texto" class="mb-3 text-sm font-semibold"></p>
+        <button id="lector-reintentar" class="rounded-full bg-yellow-400 px-5 py-2 text-sm font-bold text-slate-900 active:scale-95">Reintentar</button>
+      </div>
+
+      <!-- Subir imagen del QR (alternativa si la cámara no enfoca) -->
+      <label class="w-full cursor-pointer rounded-full bg-blue-600 px-5 py-3 text-center text-sm font-bold text-white active:scale-95">
+        📁 Subir imagen del QR
+        <input id="qr-archivo" type="file" accept="image/*" class="hidden" />
+      </label>
+      <div id="lector-archivo" class="hidden"></div>
+
+      <!-- Entrada manual (alternativa si no hay cámara) -->
+      <div class="flex w-full items-center gap-2">
+        <input id="qr-manual" type="text" inputmode="text" autocomplete="off" placeholder="pokemon:25" class="min-w-0 flex-1 rounded-full bg-white/10 px-4 py-3 text-sm text-white placeholder-slate-400 outline-none ring-1 ring-white/20 focus:ring-yellow-400" />
+        <button id="qr-manual-btn" class="rounded-full bg-yellow-400 px-5 py-3 text-sm font-bold text-slate-900 active:scale-95">Probar</button>
+      </div>
+      <p class="text-center text-[11px] text-slate-500">¿Sin cámara? Escribe el contenido del QR a mano.</p>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="pointer-events-none absolute left-1/2 top-4 z-[60] w-[90%] max-w-sm -translate-x-1/2 -translate-y-32 rounded-2xl bg-slate-900 px-5 py-3 text-center text-sm font-bold text-white shadow-xl transition-transform duration-300" role="status" aria-live="polite"></div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

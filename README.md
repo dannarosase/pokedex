@@ -44,4 +44,3 @@ icons/  (icon-192, icon-512, icon-maskable-512, apple-touch-icon)
 - La colección se guarda en `localStorage` (clave `pokemonCapturados`); al borrar los datos del navegador se pierde.
 - Sin conexión la interfaz abre y muestra lo ya capturado; capturar uno nuevo requiere Internet (PokéAPI).
 - Si cambias archivos, sube `VERSION` en `service-worker.js` para que los dispositivos actualicen la caché.
-
